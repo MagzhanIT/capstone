@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nova Core – Mark Tasks as Done</title>
+    <style>
+        :root {
+            --primary-blue: #3498db;
+            --dark-blue: #2c3e50;
+            --light-bg: #f8f9fa;
+            --white: #ffffff;
+            --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Inter', -apple-system, sans-serif;
+        }
+
+        body {
+            background-color: var(--white);
+            color: var(--dark-blue);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            padding: 40px 20px;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        h1 {
+            font-size: 1.8rem;
+            color: var(--dark-blue);
+            margin-bottom: 8px;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 500px;
+        }
+
+        /* --- Task List --- */
+        .task-list {
+            list-style: none;
+        }
+
+        .task-item {
+            background: var(--white);
+            border: 1px solid #edf2f7;
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 12px;
+            transition: var(--transition);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .task-item:hover {
+            box-shadow: 0 4px 12px rgba(44, 62, 80, 0.08);
+            transform: translateY(-2px);
+        }
+
+        .task-main {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        /* --- Custom Checkbox --- */
+        .cb-container {
+            position: relative;
+            cursor: pointer;
+            width: 24px;
+            height: 24px;
+        }
+
+        .cb-container input {
+            position: absolute;
+            opacity: 0;
+            cursor: pointer;
+        }
+
+        .checkmark {
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 24px;
+            width: 24px;
+            background-color: var(--white);
+            border: 2px solid var(--primary-blue);
+            border-radius: 6px;
+            transition: var(--transition);
+        }
+
+        .cb-container:hover input ~ .checkmark {
+            background-color: #ebf5ff;
+        }
+
+        .cb-container input:checked ~ .checkmark {
+            background-color: var(--primary-blue);
+            border-color: var(--primary-blue);
+        }
+
+        .checkmark:after {
+            content: "";
+            position: absolute;
+            display: none;
+            left: 8px;
+            top: 4px;
+            width: 5px;
+            height: 10px;
+            border: solid white;
+            border-width: 0 2px 2px 0;
+            transform: rotate(45deg);
+        }
+
+        .cb-container input:checked ~ .checkmark:after {
+            display: block;
+            animation: checkPop 0.2s ease-in;
+        }
+
+        @keyframes checkPop {
+            0% { transform: scale(0) rotate(45deg); }
+            100% { transform: scale(1) rotate(45deg); }
+        }
+
+        /* --- Task Details --- */
+        .task-info { flex-grow: 1; }
+        .task-name { font-weight: 600; font-size: 1rem; display: block; }
+        .task-meta { font-size: 0.8rem; color: #7f8c8d; display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+        
+        .task-item.done .task-name {
+            text-decoration: line-through;
+            color: #bdc3c7;
+        }
+
+        /* --- Action Menu --- */
+        .action-menu {
+            display: none;
+            margin-top: 15px;
+            padding-top: 12px;
+            border-top: 1px solid #eee;
+            gap: 8px;
+            animation: slideDown 0.3s ease-out;
+        }
+
+        @keyframes slideDown {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .btn-action {
+            flex: 1;
+            padding: 8px;
+            font-size: 0.75rem;
+            border: 1px solid #ddd;
+            background: white;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            color: var(--dark-blue);
+            transition: var(--transition);
+        }
+
+        .btn-action:hover { background: var(--dark-blue); color: white; border-color: var(--dark-blue); }
+
+        /* --- Sections & Toggles --- */
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin: 30px 0 15px;
+            font-size: 0.9rem;
+            color: #95a5a6;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .toggle-archive {
+            font-size: 0.75rem;
+            color: var(--primary-blue);
+            cursor: pointer;
+            background: none;
+            border: none;
+            text-decoration: underline;
+        }
+
+        .archive-container { display: none; }
+        .archive-container.visible { display: block; }
+
+        /* --- Fade Animation --- */
+        .fade-out { opacity: 0; transform: scale(0.9); transition: 0.4s; }
+
+        /* --- Toast Notification --- */
+        #toast {
+            position: fixed;
+            bottom: 20px;
+            background: var(--dark-blue);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 30px;
+            display: none;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            z-index: 1000;
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>Nova Core – Task Manager</h1>
+        <p>Stay on track. Archive when finished.</p>
+    </header>
+
+    <div class="container">
+        <div class="section-header">Active Tasks</div>
+        <ul class="task-list" id="activeTasks">
+            <li class="task-item" id="task-1">
+                <div class="task-main">
+                    <label class="cb-container">
+                        <input type="checkbox" onchange="toggleTask('task-1')">
+                        <span class="checkmark"></span>
+                    </label>
+                    <div class="task-info">
+                        <span class="task-name">Submit ML Research Paper</span>
+                        <div class="task-meta">✉️ Gmail • Due Apr 25</div>
+                    </div>
+                </div>
+                <div class="action-menu">
+                    <button class="btn-action" onclick="archiveTask('task-1')">Archive</button>
+                    <button class="btn-action" onclick="deleteTask('task-1')">Delete</button>
+                    <button class="btn-action" onclick="shareTask('ML Research Paper')">Share</button>
+                </div>
+            </li>
+
+            <li class="task-item" id="task-2">
+                <div class="task-main">
+                    <label class="cb-container">
+                        <input type="checkbox" onchange="toggleTask('task-2')">
+                        <span class="checkmark"></span>
+                    </label>
+                    <div class="task-info">
+                        <span class="task-name">Web Dev Lab Quiz</span>
+                        <div class="task-meta">🎓 Moodle • Due Apr 26</div>
+                    </div>
+                </div>
+                <div class="action-menu">
+                    <button class="btn-action" onclick="archiveTask('task-2')">Archive</button>
+                    <button class="btn-action" onclick="deleteTask('task-2')">Delete</button>
+                    <button class="btn-action" onclick="shareTask('Web Dev Quiz')">Share</button>
+                </div>
+            </li>
+
+            <li class="task-item" id="task-3">
+                <div class="task-main">
+                    <label class="cb-container">
+                        <input type="checkbox" onchange="toggleTask('task-3')">
+                        <span class="checkmark"></span>
+                    </label>
+                    <div class="task-info">
+                        <span class="task-name">Confirm Group Dinner</span>
+                        <div class="task-meta">📱 Telegram • Due Tonight</div>
+                    </div>
+                </div>
+                <div class="action-menu">
+                    <button class="btn-action" onclick="archiveTask('task-3')">Archive</button>
+                    <button class="btn-action" onclick="deleteTask('task-3')">Delete</button>
+                    <button class="btn-action" onclick="shareTask('Group Dinner')">Share</button>
+                </div>
+            </li>
+        </ul>
+
+        <div class="section-header">
+            Archived
+            <button class="toggle-archive" onclick="toggleArchiveView()">Show/Hide</button>
+        </div>
+        <ul class="task-list archive-container" id="archiveTasks">
+            </ul>
+    </div>
+
+    <div id="toast">Task shared with friend!</div>
+
+    <script>
+        function toggleTask(taskId) {
+            const task = document.getElementById(taskId);
+            const menu = task.querySelector('.action-menu');
+            
+            if (task.classList.contains('done')) {
+                task.classList.remove('done');
+                menu.style.display = 'none';
+            } else {
+                task.classList.add('done');
+                menu.style.display = 'flex';
+            }
+        }
+
+        function deleteTask(taskId) {
+            const task = document.getElementById(taskId);
+            task.classList.add('fade-out');
+            setTimeout(() => {
+                task.remove();
+            }, 400);
+        }
+
+        function archiveTask(taskId) {
+            const task = document.getElementById(taskId);
+            const archiveList = document.getElementById('archiveTasks');
+            
+            // Hide the menu for archived state
+            task.querySelector('.action-menu').style.display = 'none';
+            task.classList.add('fade-out');
+            
+            setTimeout(() => {
+                task.classList.remove('fade-out');
+                task.classList.add('done');
+                archiveList.appendChild(task);
+                showToast("Task moved to Archive");
+            }, 400);
+        }
+
+        function toggleArchiveView() {
+            const container = document.getElementById('archiveTasks');
+            container.classList.toggle('visible');
+        }
+
+        function shareTask(name) {
+            showToast(`Shared "${name}" link with group!`);
+        }
+
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            toast.innerText = msg;
+            toast.style.display = 'block';
+            setTimeout(() => {
+                toast.style.display = 'none';
+            }, 2500);
+        }
+    </script>
+</body>
+</html>
